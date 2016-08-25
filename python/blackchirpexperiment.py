@@ -578,14 +578,14 @@ class BlackChirpExperiment:
         #compute smoothed 2nd derivative for strong peaks
         if not self.quiet:
             print("Computing smoothed second derivative...")
-        d2y = spsig.savgol_filter(yarray,11,6,deriv=2)
+        d2y = spsig.savgol_filter(yarray,45,6,deriv=2)
         
         if not self.quiet:
             print("Building noise model...")
             
         #build noise model
         chunks = 50
-        chunk_size = len(yarray)//chunks
+        chunk_size = len(yarray)//chunks + 1
         avg = []
         noise = []
         dat = []
@@ -815,11 +815,13 @@ class BlackChirpExperiment:
         print("Computing FT with no zero padding")        
         x, y = self.ft_one(index=index,f_min=f_min,f_max=f_max,zpf=0)
         
-        print("Performing peak finding on FT")
-        xl, yl, il, sl, noise, baseline = self.find_peaks(x,y,snr)
+#        print("Performing peak finding on FT")
+#        xl, yl, il, sl, noise, baseline = self.find_peaks(x,y,snr)
         
         print("Computing FT with extra zero padding for fitting")
+        
         xfit, yfit = self.ft_one(index=index,f_min=f_min,f_max=f_max,zpf=2)
+        xl, yl, il, sl, noise, baseline = self.find_peaks(xfit,yfit,snr)
         
         #zero padded FT has higer resolution. One point in x corresponds to
         #more than 1 point in xfit. Calculate resolution factor
@@ -879,34 +881,34 @@ class BlackChirpExperiment:
                         #iteration
                         done = True;
                         il.append(next_peak)
-                        rindex = min(len(y),this_peak + win)
+                        rindex = min(len(yfit),this_peak + win)
             else:
                 #no peaks left
-                rindex = min(len(y),this_peak + win)
+                rindex = min(len(yfit),this_peak + win)
             
             #construct parameter guesses and boundary conditions
             p = [ baseline[this_peak] ]
             lowerbound = [baseline[this_peak] / 5.]
             upperbound = [baseline[this_peak] + 3.*noise[this_peak]]
             for i in peaks:
-                a = y[i]
+                a = yfit[i]
                 if fit_area:
                     a *= width*numpy.sqrt(2.*numpy.pi)
                 p.append(a)
-                p.append(x[i])
+                p.append(xfit[i])
                 p.append(width)
                 lowerbound.append(a/5./wf)
                 upperbound.append(a*5.*wf)
-                lowerbound.append(x[i]-width)
-                upperbound.append(x[i]+width)
+                lowerbound.append(xfit[i]-width)
+                upperbound.append(xfit[i]+width)
                 lowerbound.append(width/10.)
                 upperbound.append(width*10.)
             
             most_peaks = max(most_peaks,len(peaks))
   
             #construct slices for fitting          
-            left = int(round(lindex*rf))
-            right = int(round(rindex*rf))            
+            left = int(round(lindex))
+            right = int(round(rindex))            
             x_list.append(xfit[left:right])
             y_list.append(yfit[left:right])
             p_list.append(tuple(p))
