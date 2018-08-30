@@ -12,6 +12,7 @@ import os
 import bcfitting as bcfit
 import concurrent.futures
 import sys
+from scipy.optimize import brentq
 
 class BlackChirpExperiment:
     """
@@ -325,7 +326,10 @@ class BlackChirpExperiment:
                 fidlist_size = struct.unpack(">I", buffer)[0]
                 for i in range(0,fidlist_size):
                     self.fid_list.append(BlackChirpFid(version, fidfile))
-        
+        #find out if motorscan config is enabled
+        if self.d_header_values['MotorScanEnabled'].lower() \
+                in ['true','t','1','yes','y']:
+            self.motorscan = BlackChirpMotorScan(path,number)
         #if self.d_header_values['LifConfigEnabled'].lower() \
         #        in ['true', 't', '1', 'yes', 'y']
         #    with open(path+"/"+str(number)+".lif", 'rb') as liffile:
@@ -374,6 +378,7 @@ class BlackChirpExperiment:
                   +" FID(s) in fid_list.")
             print("Experiment contains "+str(len(self.time_data))
                   +" items in time_data.")
+            print("Experiment contains Motor Scan data")
             
     
     def ft_one(self, index = 0, start = None, end = None, zpf = None, 
@@ -994,7 +999,22 @@ class BlackChirpExperiment:
        
         return x, y, xl, yl, il, sl, param_list, err_list, \
                numpy.array(modelx), numpy.array(modely), cov_list
-            
+
+    def ProcessMotorMotorScan(self):
+        ChamberPressure = self.time_data['chamberPressure']
+        gamma = 5./3.
+        tmp=[]
+        psipertorr = 0.0193367747
+        for i in ChamberPressure:
+            tmp.append(float(i))
+        Ps = numpy.mean(tmp)
+        for i in range(self.motorscan.Z_size):
+            for j in range(self.motorscan.Y_size):
+                for k in range(self.motorscan.X_size):
+                    for l in range(self.motorscan.t_size):
+                        Pi = self.motorscan.rawdata[i,j,k,l]/psipertorr
+                        self.motorscan.data[i,j,k,l] = brentq((MachNumberRootFinder),0.001,200.,args=(Pi,Ps,gamma))
+        return
             
                     
         
@@ -1139,9 +1159,49 @@ class BlackChirpFid:
         
         self.xy_data = numpy.vstack((self.x_data, self.data))
         
+  
+class BlackChirpMotorScan:
+    def __init__(self,path,number):
+        fid = open(path+'/'+'%i.mdt'%number,'rb') 
+        buffer = fid.read(4)
+        ms_len = struct.unpack(">I",buffer)
+        buffer = fid.read(ms_len[0])
+        magic_string = buffer.decode('ascii')
+        buffer = fid.read(4)
+        self.Z_size = struct.unpack(">I", buffer)[0]
+        buffer = fid.read(4)
+        self.Y_size = struct.unpack(">I", buffer)[0]
+        buffer = fid.read(4)
+        self.X_size = struct.unpack(">I", buffer)[0]
+        buffer = fid.read(4)
+        self.t_size = struct.unpack(">I", buffer)[0]
         
+        self.rawdata = numpy.zeros((self.Z_size,self.Y_size,self.X_size,self.t_size))
+        self.data = numpy.zeros((self.Z_size,self.Y_size,self.X_size,self.t_size))
+        
+        
+        for i in range(self.Z_size):
+            for j in range(self.Y_size):
+                for k in range(self.X_size):
+                    for l in range(self.t_size):
+                        unpacked = struct.unpack(">d", fid.read(struct.calcsize(">d")))[0]
+                        self.rawdata[i,j,k,l] = unpacked
+                    fid.read(4)
+                fid.read(4)
+            fid.read(4)
+        fid.close()
+    
+def MachNumberRootFinder(M, Pi, Ps, gamma):
+    a = (((gamma+1)*M**2)/2)**(gamma/(gamma-1))
+    b = ((gamma+1)/(2*gamma*M**2-(gamma-1)))**(1/(gamma-1))
+    return (a*b-(Pi/Ps))
+
+
+      
 ############################################################################
 #                          INITIALIZATION                                  #
 ############################################################################
         
 BlackChirpExperiment.load_settings()
+test = BlackChirpExperiment(36)
+test.ProcessMotorMotorScan()
