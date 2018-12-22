@@ -326,13 +326,13 @@ class BlackChirpExperiment:
                 fidlist_size = struct.unpack(">I", buffer)[0]
                 for i in range(0,fidlist_size):
                     self.fid_list.append(BlackChirpFid(version, fidfile))
-        #find out if motorscan config is enabled
+#        find out if motorscan config is enabled
         if self.d_header_values['MotorScanEnabled'].lower() \
                 in ['true','t','1','yes','y']:
             self.motorscan = BlackChirpMotorScan(path,number)
-        #if self.d_header_values['LifConfigEnabled'].lower() \
-        #        in ['true', 't', '1', 'yes', 'y']
-        #    with open(path+"/"+str(number)+".lif", 'rb') as liffile:
+#        if self.d_header_values['LifConfigEnabled'].lower() \
+#                in ['true', 't', '1', 'yes', 'y']
+#            with open(path+"/"+str(number)+".lif", 'rb') as liffile:
         
         #load in time data
         self.time_data = {}
@@ -1002,18 +1002,28 @@ class BlackChirpExperiment:
 
     def ProcessMotorMotorScan(self):
         ChamberPressure = self.time_data['chamberPressure']
-        gamma = 5./3.
-        tmp=[]
-        psipertorr = 0.0193367747
+        AvgChamberPressureTorr = 0
         for i in ChamberPressure:
-            tmp.append(float(i))
-        Ps = numpy.mean(tmp)
+            AvgChamberPressureTorr += float(i)
+        AvgChamberPressureTorr /= len(ChamberPressure)
+        AvgChamberPressurePSI = AvgChamberPressureTorr/51.7149
+        self.AvgChamberPressurePSI = AvgChamberPressurePSI
+        
+        try:
+            CarrierName = self.d_header_values['FlowConfigChannel.0.Name']
+        except KeyError:
+            raise KeyError('No Carrier Gas input, add \"FlowConfigChannel.0.Name	Ar/He/N2\" to %i.hdr file and try again'%self.d_number)
+
+        self.Carrier = CarrierGas(CarrierName)
+        gamma = self.Carrier.gamma
+        
+
         for i in range(self.motorscan.Z_size):
             for j in range(self.motorscan.Y_size):
                 for k in range(self.motorscan.X_size):
                     for l in range(self.motorscan.t_size):
-                        Pi = self.motorscan.rawdata[i,j,k,l]/psipertorr
-                        self.motorscan.data[i,j,k,l] = brentq((MachNumberRootFinder),0.001,200.,args=(Pi,Ps,gamma))
+                        self.motorscan.Pratio = round(self.motorscan.rawdata[i,j,k,l]/self.AvgChamberPressurePSI,4)
+#                        self.motorscan.data[i,j,k,l] = brentq((MachNumberRootFinder),0.001,200.,args=(Pi,Ps,gamma))
         return
             
                     
@@ -1190,6 +1200,24 @@ class BlackChirpMotorScan:
                 fid.read(4)
             fid.read(4)
         fid.close()
+        
+class CarrierGas:
+    def __init__(self,Carrier):
+        if Carrier == 'Ar':
+            self.name = Carrier
+            self.mass = 6.6335209e-26
+            self.gamma = 5./3.
+        elif Carrier == 'N2':
+            self.name = Carrier
+            self.mass = 4.6517342e-26
+            self.gamma = 7.0/5.0
+        elif Carrier == 'He':
+            self.name = Carrier
+            self.mass = 6.6464764e-27
+            self.gamma = 5./3.
+        else:
+            raise ValueError('Invalid Carrier Gas, currently accepted values are Ar/N2/He')
+            sys.exit(41)
     
 def MachNumberRootFinder(M, Pi, Ps, gamma):
     a = (((gamma+1)*M**2)/2)**(gamma/(gamma-1))
@@ -1203,5 +1231,8 @@ def MachNumberRootFinder(M, Pi, Ps, gamma):
 ############################################################################
         
 BlackChirpExperiment.load_settings()
-test = BlackChirpExperiment(36)
+#test = BlackChirpExperiment(1414,'/home/zsbuchanan/Documents/Data/1414/')
+test = BlackChirpExperiment(37)
 test.ProcessMotorMotorScan()
+#exp1414 = BlackChirpExperiment(1414, '/home/zsbuchanan/Documents/Data/1414/')
+#x,y,xl,yl,il,sl,pl,el,mx,yx,cov = exp1414.analyze_fid()

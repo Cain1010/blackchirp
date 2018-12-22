@@ -147,7 +147,7 @@ class BlackChirpMotorScan:
             t = range(len(s))
             l, = plt.plot(t, s, lw=2, color='red',marker='o')
             ax1 = plt.axes([0.25, 0.14, 0.65, 0.03])#, facecolor=axcolor)
-            s1 = Slider(ax1, 'X', 0, self.Y_size-1, valinit=y, valfmt='%i')#, valstep=delta_f)
+            s1 = Slider(ax1, 'Y', 0, self.Y_size-1, valinit=y, valfmt='%i')#, valstep=delta_f)
             ax2 = plt.axes([0.25, 0.09, 0.65, 0.03])#, facecolor=axcolor)
             s2 = Slider(ax2, 'Z', 0, self.Z_size-1, valinit=z, valfmt='%i')#, valstep=delta_f)
             def update(val):
@@ -205,7 +205,7 @@ class BlackChirpMotorScan:
         
         sZ = Slider(axZ, 'Z', 0., self.Z_size-1, valinit=z, valfmt='%i')#, valstep=delta_f)
         st = Slider(axt, 't', 0, self.t_size-1, valinit=t, valfmt='%i')
-        
+#        ax.xticks([])
         
         def update(val):
             z = int('%i'%sZ.val)
@@ -259,51 +259,73 @@ class BlackChirpMotorScan:
         ax = fig.gca(projection='3d')
         ax.plot_wireframe(Y,Z,P)
                            
+#    def MachNumbers(self,gamma=1.66):
+#        M = np.arange(0.0001,10,.000001)
+#        a = (((gamma+1)*M**2)/2)**(gamma/(gamma-1))
+#        b = ((gamma+1)/(2*gamma*M**2-(gamma-1)))**(1/(gamma-1)) 
+#        Pratio = a*b
+#        mtp = {}
+#        for i in range(len(M)):
+#            mtp[round(Pratio[i],4)] = M[i]
+#        self.MachtoPres = mtp
+#        self.MachTest = [Pratio,M]
+    def getData(self,x,y,z,t):
+        pi = self.rawdata[x,y,z,t]
+        ps = 0.0333
+        pr = round(pi/ps,4)
+        return(pr)
+        
     def MachNumbers(self,gamma=1.66):
-        M = np.arange(1,10,.01)
-        a = (((gamma+1)*M**2)/2)**(gamma/(gamma-1))
-        b = ((gamma+1)/(2*gamma*M**2-(gamma-1)))**(1/(gamma-1)) 
-        Pratio = a*b
-        self.MachtoPres = [M,Pratio]
-        
-    def PtoM(self,gamma=1.66):
-        
-        
-        
-        gamma = 5./3.
-        psipertorr = 0.0193367747
-        Ps = 1.93
+        Pratio = []
         for i in range(self.Z_size):
             for j in range(self.Y_size):
                 for k in range(self.X_size):
                     for l in range(self.t_size):
-                        Pi = self.rawdata[i,j,k,l]/psipertorr
-                        self.data[i,j,k,l] = np.real(brentq((MachNumber),0.00001,200.,args=(Pi,Ps,gamma)))
+                        Pratio.append(self.getData(i,j,k,l))
+        mtp = {}
+        for i in range(len(Pratio)):
+            PR = Pratio[i]
+            try:
+                mtp[Pratio[i]] = np.real(brentq((MachNumber),1,200.,args=(Pratio[i],gamma)))
+            except TypeError:
+                print(PR)
+            except ValueError:
+                print('outside bounds of equation')
+        self.MachtoPres = mtp
+        
+    def PtoM(self,PR,gamma=1.66):
+       try: 
+           M = np.real(brentq((MachNumber),0.0000,200.,args=(PR,gamma)))
+       except TypeError:
+            print(PR)
 #        M = brentq((MachNumber),1.,200,args=(0.67,.027,gamma))
-        return ()
+       return (M)
     
-def MachNumber(M, Pi, Ps, gamma):
+def MachNumber(M,PR, gamma):
     a = (((gamma+1)*M**2)/2)**(gamma/(gamma-1))
     b = ((gamma+1)/(2*gamma*M**2-(gamma-1)))**(1/(gamma-1))
-    return (a*b-(Pi/Ps))
+    return (a*b-(PR))
 
 
 
 test = BlackChirpMotorScan(37,True)
-test.YZ3DPlot()
-test.XYCrosssection()
+#test.YZ3DPlot()
+#test.XYCrosssection()
 test.timetrace()
-test.YZCrosssection()
-test.pressuretrace()
-test.pressuretrace('XZ')
-test.pressuretrace('YZ')
+#test.YZCrosssection()
+#test.pressuretrace()
+#test.pressuretrace('XZ')
+#test.pressuretrace('YZ')
 #test.PtoM()
 
 #test.MachNumbers()
 
-
-
-
+#tmp = test.rawdata[0,9,:,34]
+#tmp2 = np.diff(tmp)
+#dtmp = []
+#for i in range(1,len(tmp)-1):
+#    dtmp.append(tmp[i+1]-tmp[i-1])
+#    
 
 
 
